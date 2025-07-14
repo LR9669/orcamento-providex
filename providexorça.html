@@ -1,0 +1,1027 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planilha de Orçamento de Materiais e Deslocamento por Classificação Detalhada - PROVIDEX</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- jsPDF and html2canvas CDNs for PDF generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8;
+            color: #333;
+        }
+
+        /* Background image with transparency */
+        .background-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url('https://placehold.co/1920x1080/E0F2FE/FFFFFF?text=BOMBEIRO+APAGANDO+INCENDIO'); /* Placeholder image for firefighter */
+            background-size: cover;
+            background-position: center;
+            opacity: 0.05; /* Very transparent */
+            z-index: -1; /* Send to back */
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 1.5rem;
+            background-color: #ffffff;
+            border-radius: 0.75rem; /* rounded-xl */
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1); /* shadow-xl */
+            position: relative; /* Ensure it's above the background overlay */
+            z-index: 0;
+        }
+        .table-container {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch; /* Enable smooth scrolling on iOS */
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1.5rem;
+        }
+        th, td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0; /* border-b border-gray-200 */
+        }
+        th {
+            background-color: #edf2f7; /* bg-gray-100 */
+            font-weight: 600; /* font-semibold */
+            color: #2d3748; /* text-gray-800 */
+            white-space: nowrap; /* Prevent wrapping in headers */
+        }
+        tr:hover {
+            background-color: #f7fafc; /* hover:bg-gray-50 */
+        }
+        .category-header {
+            background-color: #e0f2fe; /* light blue for categories */
+            font-weight: 700; /* font-bold */
+            color: #2c5282; /* dark blue text */
+            text-transform: uppercase;
+        }
+        input[type="number"], input[type="text"] {
+            width: 100%; /* Make text inputs full width */
+            padding: 0.25rem 0.5rem;
+            border: 1px solid #cbd5e0; /* border-gray-300 */
+            border-radius: 0.25rem; /* rounded-md */
+            box-sizing: border-box; /* Include padding and border in the element's total width and height */
+        }
+        /* Adjusted width for number inputs in table */
+        input[type="number"][data-quantity], input[type="number"][data-price] {
+            width: 70px; /* Adjusted from 80px */
+            text-align: right;
+        }
+        .total-row td {
+            font-weight: bold;
+            background-color: #e2e8f0;
+        }
+        .subtotal-cell, .grand-total-cell {
+            text-align: right;
+            font-weight: 500;
+        }
+        .grand-total-cell {
+            font-size: 1.25rem; /* text-xl */
+            color: #1a202c; /* text-gray-900 */
+        }
+        .item-name-cell {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .item-icon {
+            width: 30px;
+            height: 30px;
+            border-radius: 0.25rem;
+            object-fit: cover;
+        }
+        .disclaimer {
+            margin-top: 2rem;
+            padding: 1rem;
+            background-color: #fffbeb; /* bg-yellow-50 */
+            border-left: 4px solid #f6ad55; /* border-l-4 border-yellow-500 */
+            border-radius: 0.5rem; /* rounded-md */
+            color: #744210; /* text-yellow-800 */
+        }
+        .company-info, .contractor-info {
+            text-align: center;
+            margin-bottom: 1.5rem;
+            font-size: 0.9rem;
+            color: #4a5568;
+        }
+        .company-info p, .contractor-info p {
+            margin: 0.25rem 0;
+        }
+        .contractor-info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-top: 1.5rem;
+            text-align: left;
+        }
+        .contractor-info-grid div {
+            display: flex;
+            flex-direction: column;
+        }
+        .contractor-info-grid label {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+            color: #2d3748;
+        }
+        .bdi-row td {
+            background-color: #f0f9ff; /* light blue for BDI row */
+            font-weight: bold;
+        }
+        /* Adjusted width for BDI percentage input */
+        .bdi-input {
+            width: 50px; /* Adjusted from 60px */
+            text-align: center;
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 1000; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: auto;
+            padding: 2rem;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 600px;
+            border-radius: 0.75rem;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            position: relative;
+        }
+        .close-button {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            position: absolute;
+            top: 10px;
+            right: 20px;
+        }
+        .close-button:hover,
+        .close-button:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .supplier-list {
+            margin-top: 1rem;
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.5rem;
+            padding: 0.5rem;
+        }
+        .supplier-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+            border-bottom: 1px dashed #e2e8f0;
+        }
+        .supplier-item:last-child {
+            border-bottom: none;
+        }
+        .supplier-item button {
+            background-color: #4299e1;
+            color: white;
+            padding: 0.3rem 0.6rem;
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .supplier-item button:hover {
+            background-color: #3182ce;
+        }
+        .supplier-form {
+            margin-top: 1.5rem;
+            padding-top: 1rem;
+            border-top: 1px solid #e2e8f0;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+        .supplier-form div {
+            display: flex;
+            flex-direction: column;
+        }
+        .supplier-form button {
+            grid-column: span 2;
+            background-color: #48bb78;
+            color: white;
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .supplier-form button:hover {
+            background-color: #38a169;
+        }
+        .view-suppliers-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1.2rem;
+            color: #4299e1;
+            margin-left: 0.5rem;
+            transition: color 0.2s;
+        }
+        .view-suppliers-btn:hover {
+            color: #3182ce;
+        }
+        .logo-container {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .logo-container img {
+            max-width: 250px;
+            height: auto;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .pdf-button-container {
+            text-align: center;
+            margin-top: 2rem;
+        }
+        .pdf-button {
+            background-color: #ef4444; /* red-500 */
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            border: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .pdf-button:hover {
+            background-color: #dc2626; /* red-600 */
+        }
+        .section-box {
+            background-color: #f8fafc; /* bg-gray-50 */
+            border: 1px solid #e2e8f0; /* border-gray-200 */
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            margin-top: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+        .section-box h3 {
+            font-size: 1.125rem; /* text-lg */
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 1rem;
+        }
+        .section-box p {
+            margin-bottom: 0.5rem;
+            line-height: 1.5;
+        }
+        .section-box label {
+            font-weight: 500;
+            margin-right: 0.5rem;
+        }
+        /* Adjusted width for inline number inputs */
+        .section-box input[type="number"].inline-input {
+            width: 50px; /* Adjusted from 60px */
+            text-align: center;
+            display: inline-block;
+            margin-left: 0.5rem;
+        }
+        .suppliers-footer {
+            margin-top: 2rem;
+            padding: 1rem;
+            background-color: #e6fffa; /* Light teal background */
+            border: 1px solid #81e6d9; /* Teal border */
+            border-radius: 0.5rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+        .suppliers-footer h3 {
+            color: #2c7a7b; /* Darker teal text */
+            margin-bottom: 0.75rem;
+        }
+        .editable-supplier-list {
+            display: flex; /* Use flexbox for horizontal layout */
+            flex-wrap: wrap; /* Allow wrapping to next line */
+            gap: 1rem; /* Space between items */
+            padding-bottom: 0.5rem; /* Space for scrollbar */
+            -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+        }
+        .editable-supplier-item {
+            display: flex;
+            align-items: center;
+            background-color: #b2f5ea; /* Lighter teal for individual supplier names */
+            padding: 0.4rem 0.8rem;
+            border-radius: 9999px; /* pill shape */
+            font-size: 0.875rem;
+            color: #2d3748;
+            font-weight: 500;
+            flex-shrink: 0; /* Prevent items from shrinking */
+            position: relative;
+        }
+        .editable-supplier-item input[type="text"] {
+            background: none;
+            border: none;
+            padding: 0;
+            margin: 0;
+            color: #2d3748;
+            font-weight: 500;
+            width: auto; /* Adjust width dynamically */
+            min-width: 80px; /* Minimum width */
+            text-align: left;
+        }
+        .editable-supplier-item .supplier-logo {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+            object-fit: cover;
+            border: 1px solid #4fd1c5;
+        }
+        .editable-supplier-item .remove-supplier-btn {
+            background: none;
+            border: none;
+            color: #e53e3e;
+            font-size: 1rem;
+            margin-left: 0.5rem;
+            cursor: pointer;
+            padding: 0 0.2rem;
+        }
+        .add-supplier-area {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+            align-items: center;
+        }
+        .add-supplier-area input[type="file"] {
+            width: auto;
+            padding: 0.25rem;
+            border: 1px solid #cbd5e0;
+            border-radius: 0.25rem;
+        }
+        .add-supplier-area button {
+            background-color: #48bb78;
+            color: white;
+            padding: 0.4rem 0.8rem;
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            border: none;
+        }
+        .add-supplier-area button:hover {
+            background-color: #38a169;
+        }
+        /* Styles for PDF generation - hide editable elements */
+        .pdf-hide {
+            display: none !important;
+            visibility: hidden !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="background-overlay"></div> <!-- Background image overlay -->
+
+    <div class="container" id="printable-area">
+        <div class="logo-container">
+            <img src="logprovidex.png" alt="Logo Providex">
+        </div>
+        <h1 class="text-3xl font-bold text-center text-blue-800 mb-6">Planilha de Orçamento de Materiais e Deslocamento por Classificação Detalhada - PROVIDEX</h1>
+        <p class="text-center text-gray-600 mb-4">Estimativa de Custos de Materiais e Deslocamento de Equipe - Valores Referência 2025</p>
+
+        <div class="company-info">
+            <p><strong class="text-blue-700">PROVIDEX SISTEMA DE PREVENÇÃO CONTRA INCÊNDIO</strong></p>
+            <p>Av. Praia de Itapuã, 963 - sala 02 - Vilas do Atlântico, Lauro de Freitas - BA, 42700-000</p>
+            <p>Telefone: (71) 3123-1123</p>
+        </div>
+
+        <div class="contractor-info">
+            <h2 class="text-xl font-bold text-blue-700 mb-4">Informações da Empresa Contratante</h2>
+            <div class="contractor-info-grid">
+                <div>
+                    <label for="contractor-name">Nome da Empresa:</label>
+                    <input type="text" id="contractor-name" placeholder="Nome completo da empresa">
+                </div>
+                <div>
+                    <label for="contractor-cnpj">CNPJ:</label>
+                    <input type="text" id="contractor-cnpj" placeholder="XX.XXX.XXX/XXXX-XX">
+                </div>
+                <div>
+                    <label for="contractor-address">Endereço:</label>
+                    <input type="text" id="contractor-address" placeholder="Rua, Número, Bairro, Cidade - Estado, CEP">
+                </div>
+                <div>
+                    <label for="contractor-contact">Contato (Telefone/E-mail):</label>
+                    <input type="text" id="contractor-contact" placeholder="(XX) XXXX-XXXX / email@exemplo.com">
+                </div>
+            </div>
+        </div>
+
+        <div class="disclaimer">
+            <p class="font-semibold">Atenção:</p>
+            <p>Os valores unitários apresentados são **estimativas gerais** de mercado para 2025 e podem variar. Esta planilha é para fins de **planejamento e estimativa**, permitindo que você ajuste as quantidades e preços unitários. Sempre solicite orçamentos detalhados de fornecedores e prestadores de serviço para valores precisos.</p>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th class="py-3 px-4">Classificação / Modo de Uso</th>
+                        <th class="py-3 px-4">Item (Código da Norma)</th>
+                        <th class="py-3 px-4">Descrição Detalhada</th>
+                        <th class="py-3 px-4">Unidade</th>
+                        <th class="py-3 px-4">Quantidade</th>
+                        <th class="py-3 px-4">Preço Unitário (R$)</th>
+                        <th class="py-3 px-4">Subtotal (R$)</th>
+                        <th class="py-3 px-4">Observações</th>
+                    </tr>
+                </thead>
+                <tbody id="budget-table-body">
+                    <!-- Data will be dynamically inserted here by JavaScript -->
+                </tbody>
+                <tfoot>
+                    <tr class="total-row">
+                        <td class="py-3 px-4" colspan="6">Subtotal de Materiais e Serviços</td>
+                        <td class="py-3 px-4 subtotal-cell" id="materials-services-total">R$ 0,00</td>
+                        <td class="py-3 px-4"></td>
+                    </tr>
+                    <tr class="bdi-row">
+                        <td class="py-3 px-4" colspan="4">BDI (Benefícios e Despesas Indiretas)</td>
+                        <td class="py-3 px-4"><input type="number" value="25" min="0" step="0.1" id="bdi-percentage-input" class="bdi-input"> %</td>
+                        <td class="py-3 px-4"></td>
+                        <td class="py-3 px-4 subtotal-cell" id="bdi-total">R$ 0,00</td>
+                        <td class="py-3 px-4"></td>
+                    </tr>
+                    <tr class="total-row">
+                        <td class="py-3 px-4" colspan="6">Total Geral Estimado (Materiais + Serviços + BDI)</td>
+                        <td class="py-3 px-4 grand-total-cell" id="grand-total">R$ 0,00</td>
+                        <td class="py-3 px-4"></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        <!-- Prazo de Execução Section -->
+        <div class="section-box">
+            <h3>Prazo de Execução:</h3>
+            <p>O prazo estimado para a conclusão da obra é de 
+                <input type="number" id="execution-days-input" value="30" min="1" class="inline-input"> dias corridos, a partir da data de início dos trabalhos. Este prazo é
+                basado em um planejamento detalhado e inclui todas as etapas, desde a preparação até a finalização. O prazo pode ser ajustado de acordo com as necessidades específicas do projeto e as condições
+                encontradas durante a execução.
+            </p>
+        </div>
+
+        <!-- Condições de Pagamento Section -->
+        <div class="section-box">
+            <h3>Condições de Pagamento:</h3>
+            <p>Sinal: É requerido um pagamento de 
+                <input type="number" id="down-payment-percentage-input" value="20" min="0" max="100" step="1" class="inline-input"> % do valor total do contrato como sinal para a
+                confirmação do início dos trabalhos.
+            </p>
+            <p>Pagamento Restante: O saldo restante será pago com base em medições do progresso da obra. Os
+                pagamentos serão realizados de acordo com o avanço das etapas, conforme descrito no cronograma do projeto e acordado previamente entre as partes.
+            </p>
+        </div>
+
+        <!-- Editable Suppliers Section -->
+        <div class="section-box suppliers-footer">
+            <h3>Principais Fornecedores:</h3>
+            <div class="editable-supplier-list" id="editable-supplier-list">
+                <!-- Editable supplier items will be dynamically added here by JavaScript -->
+            </div>
+            <div class="add-supplier-area pdf-hide">
+                <input type="text" id="new-supplier-name-input" placeholder="Nome do novo fornecedor" class="w-full">
+                <input type="file" id="new-supplier-logo-input" accept="image/*" class="w-full">
+                <button id="add-new-supplier-button">Adicionar Fornecedor</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PDF Generation Button (outside printable-area for cleaner PDF output) -->
+    <div class="pdf-button-container">
+        <button id="generate-pdf-button" class="pdf-button">Gerar PDF Não Editável</button>
+    </div>
+
+    <!-- Supplier Modal (for item-specific suppliers) -->
+    <div id="supplierModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <h2 class="text-2xl font-bold text-blue-800 mb-4" id="modal-item-name"></h2>
+            <h3 class="text-xl font-semibold text-gray-700 mb-2">Fornecedores:</h3>
+            <div class="supplier-list" id="supplier-list">
+                <!-- Suppliers will be listed here -->
+            </div>
+
+            <div class="supplier-form">
+                <h3 class="text-xl font-semibold text-gray-700 mb-2 col-span-2">Adicionar Novo Fornecedor:</h3>
+                <div>
+                    <label for="new-supplier-name">Nome do Fornecedor:</label>
+                    <input type="text" id="new-supplier-name" placeholder="Nome do Fornecedor">
+                </div>
+                <div>
+                    <label for="new-supplier-price">Preço Unitário (R$):</label>
+                    <input type="number" id="new-supplier-price" min="0" step="0.01" placeholder="0.00">
+                </div>
+                <div>
+                    <label for="new-supplier-contact">Contato:</label>
+                    <input type="text" id="new-supplier-contact" placeholder="Telefone/E-mail">
+                </div>
+                <div>
+                    <label for="new-supplier-notes">Observações:</label>
+                    <input type="text" id="new-supplier-notes" placeholder="Notas sobre o fornecedor">
+                </div>
+                <button id="add-supplier-button">Adicionar Fornecedor</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="company-info" style="margin-top: 3rem; margin-bottom: 2rem;">
+        <div class="logo-container">
+            <img src="logprovidex.png" alt="Logo Providex">
+        </div>
+        <p><strong class="text-blue-700">PROVIDEX SISTEMA DE PREVENÇÃO CONTRA INCÊNDIO</strong></p>
+        <p>Av. Praia de Itapuã, 963 - sala 02 - Vilas do Atlântico, Lauro de Freitas - BA, 42700-000</p>
+        <p>Telefone: (71) 3123-1123</p>
+        <p>Site: <a href="https://www.providex.com.br/" target="_blank" class="text-blue-600 hover:underline">www.providex.com.br</a></p>
+        <p>Contato: Roque (Sócio/Proprietário) - (71) 9654-5423</p>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const tableBody = document.getElementById('budget-table-body');
+            const bdiPercentageInput = document.getElementById('bdi-percentage-input');
+            const bdiTotalCell = document.getElementById('bdi-total');
+            const materialsServicesTotalCell = document.getElementById('materials-services-total');
+            const grandTotalCell = document.getElementById('grand-total');
+            const generatePdfButton = document.getElementById('generate-pdf-button');
+
+            // Editable fields for PDF generation
+            const executionDaysInput = document.getElementById('execution-days-input');
+            const downPaymentPercentageInput = document.getElementById('down-payment-percentage-input');
+
+            // Modal elements
+            const supplierModal = document.getElementById('supplierModal');
+            const closeButton = supplierModal.querySelector('.close-button');
+            const modalItemName = document.getElementById('modal-item-name');
+            const supplierList = document.getElementById('supplier-list');
+            const newSupplierNameInput = document.getElementById('new-supplier-name');
+            const newSupplierPriceInput = document.getElementById('new-supplier-price');
+            const newSupplierContactInput = document.getElementById('new-supplier-contact');
+            const newSupplierNotesInput = document.getElementById('new-supplier-notes');
+            const addSupplierButton = document.getElementById('add-supplier-button');
+
+            // Elements for the new editable suppliers footer
+            const editableSupplierList = document.getElementById('editable-supplier-list');
+            const newSupplierNameInputMain = document.getElementById('new-supplier-name-input');
+            const newSupplierLogoInputMain = document.getElementById('new-supplier-logo-input');
+            const addNewSupplierButton = document.getElementById('add-new-supplier-button');
+
+            // Initial main suppliers data (now with logo placeholder)
+            let mainSuppliersData = [
+                { name: 'Enerflex', logo: 'https://placehold.co/24x24/4CAF50/FFFFFF?text=EF' },
+                { name: 'Sitex', logo: 'https://placehold.co/24x24/2196F3/FFFFFF?text=SX' },
+                { name: 'GP Cabos', logo: 'https://placehold.co/24x24/FF9800/FFFFFF?text=GP' },
+                { name: 'Senai', logo: 'https://placehold.co/24x24/9C27B0/FFFFFF?text=SN' },
+                { name: 'Senac', logo: 'https://placehold.co/24x24/00BCD4/FFFFFF?text=SC' },
+                { name: 'Uni Dom Pedro/Afya', logo: 'https://placehold.co/24x24/8BC34A/FFFFFF?text=UP' },
+                { name: 'Ilumac', logo: 'https://placehold.co/24x24/FFC107/000000?text=IL' },
+                { name: 'Inteli', logo: 'https://placehold.co/24x24/607D8B/FFFFFF?text=IN' },
+                { name: 'Segurimax', logo: 'https://placehold.co/24x24/795548/FFFFFF?text=SG' },
+                { name: 'Master Carbos', logo: 'https://placehold.co/24x24/E91E63/FFFFFF?text=MC' },
+                { name: 'SBR', logo: 'https://placehold.co/24x24/673AB7/FFFFFF?text=SBR' },
+            ];
+
+            let currentItemIndex = -1; // To keep track of which item's suppliers are being edited
+
+            // Initial data structure for items, now including a 'suppliers' array for each item
+            // The 'price' property will hold the currently selected supplier's price or the default.
+            const budgetItems = [
+                // Extintores
+                { category: 'Extintores', name: 'Extintor ABC 6kg', description: 'Extintor de pó químico ABC para diversas classes de incêndio (A, B, C).', unit: 'Unidade', quantity: 1, price: 280.00, notes: 'Para uso geral em edificações.', icon: 'https://placehold.co/30x30/FF0000/FFFFFF?text=ABC', suppliers: [] },
+                { category: 'Extintores', name: 'Extintor CO2 6kg', description: 'Extintor de dióxido de carbono para incêndios em equipamentos elétricos (Classe C) e líquidos inflamáveis (Classe B).', unit: 'Unidade', quantity: 1, price: 1000.00, notes: 'Para locais com equipamentos eletrônicos sensíveis.', icon: 'https://placehold.co/30x30/000000/FFFFFF?text=CO2', suppliers: [] },
+                { category: 'Extintores', name: 'Extintor de Incêndio Tipo CO2 (6 kg)', description: 'Extintor de dióxido de carbono de 6 kg, para incêndios de Classe B e C.', unit: 'Unidade', quantity: 1, price: 950.00, notes: 'Conforme NBR 11716.', icon: 'https://placehold.co/30x30/FF0000/FFFFFF?text=EXT', suppliers: [] },
+                { category: 'Extintores', name: 'Extintor de Incêndio ABC 2A 20 BC (4 kg)', description: 'Extintor de pó químico ABC de 4 kg, para incêndios de Classe A, B e C.', unit: 'Unidade', quantity: 1, price: 250.00, notes: 'Conforme NBR 15808.', icon: 'https://placehold.co/30x30/FF0000/FFFFFF?text=EXT', suppliers: [] },
+                { category: 'Extintores', name: 'Extintor de Incêndio Tipo Pó Químico Seco (P.Q.S) 80 B.C', description: 'Extintor de pó químico seco de 80 B.C, para incêndios de Classe B e C.', unit: 'Unidade', quantity: 1, price: 1500.00, notes: 'Conforme NBR 15808.', icon: 'https://placehold.co/30x30/FF0000/FFFFFF?text=EXT', suppliers: [] },
+                { category: 'Extintores', name: 'Extintor de Incêndio Tipo Pó Químico Seco (P.Q.S) 80 B.C - Sobre Rodas', description: 'Extintor de pó químico seco de 80 B.C montado sobre rodas, para grandes áreas ou alto risco.', unit: 'Unidade', quantity: 1, price: 2500.00, notes: 'Conforme NBR 15808.', icon: 'https://placehold.co/30x30/FF0000/FFFFFF?text=EXT', suppliers: [] },
+
+                // Sistemas Hidráulicos e Acessórios
+                { category: 'Sistemas Hidráulicos e Acessórios', name: 'Hidrante Completo', description: 'Abrigo, válvula globo, esguicho regulável, mangueira (1.1/2" x 15m). Sistema fixo de combate a incêndio.', unit: 'Conjunto', quantity: 1, price: 2200.00, notes: 'Conforme dimensionamento do projeto hidráulico (NBR 13714).', icon: 'https://placehold.co/30x30/FF4500/FFFFFF?text=HID', suppliers: [] },
+                { category: 'Sistemas Hidráulicos e Acessórios', name: 'Skid Bombas Jockey Principal e Reserva Automatizados', description: 'Conjunto de bombas jockey, principal e de reserva com automação. Essencial para sistemas de hidrantes/sprinklers.', unit: 'Conjunto', quantity: 1, price: 15000.00, notes: 'Conforme NBR 13714.', icon: 'https://placehold.co/30x30/FF0000/FFFFFF?text=SKID', suppliers: [] },
+                { category: 'Sistemas Hidráulicos e Acessórios', name: 'Caixa Abrigo de Mangueira (90x70x17 cm) em Aço Pint. Eletroestática', description: 'Abrigo metálico para mangueira de incêndio, pintura eletrostática. Protege e organiza o equipamento.', unit: 'Unidade', quantity: 1, price: 600.00, notes: 'Conforme NBR 13714.', icon: 'https://placehold.co/30x30/FF4500/FFFFFF?text=CAIXA', suppliers: [] },
+                { category: 'Sistemas Hidráulicos e Acessórios', name: 'Mangueira Incêndio Tipo 1 (1.1/2")', description: 'Mangueira de incêndio Tipo 1, diâmetro 1.1/2 polegadas. Para uso em hidrantes.', unit: 'Metro', quantity: 15, price: 40.00, notes: 'Conforme NBR 11861.', icon: 'https://placehold.co/30x30/FF4500/FFFFFF?text=MANG', suppliers: [] },
+                { category: 'Sistemas Hidráulicos e Acessórios', name: 'Tubo Galvanizado (2.1/2" 3.35 150 LBS NBR5580 6 M)', description: 'Tubo de aço galvanizado, 2.1/2 polegadas, 3.35mm espessura, 150 LBS, 6 metros. Para rede de hidrantes.', unit: 'Barra', quantity: 5, price: 350.00, notes: 'Conforme NBR 5580.', icon: 'https://placehold.co/30x30/8B4513/FFFFFF?text=TUBO', suppliers: [] },
+                { category: 'Sistemas Hidráulicos e Acessórios', name: 'Tubo PVC', description: 'Tubo de PVC para instalações diversas.', unit: 'Metro', quantity: 20, price: 15.00, notes: 'Para sistemas de água fria ou conduítes.', icon: 'https://placehold.co/30x30/FFD700/000000?text=PVC', suppliers: [] },
+                { category: 'Sistemas Hidráulicos e Acessórios', name: 'Tampo Ferro Fundido (60x40 cm) (Hidrante de Passeio)', description: 'Tampo de ferro fundido para hidrante de passeio. Proteção e acesso ao hidrante.', unit: 'Unidade', quantity: 1, price: 400.00, notes: 'Para hidrantes subterrâneos.', icon: 'https://placehold.co/30x30/A52A2A/FFFFFF?text=TAMPO', suppliers: [] },
+                { category: 'Sistemas Hidráulicos e Acessórios', name: 'Registro Industrial Latão PN 16 Água Bruta Tipo Gaveta 2.1/2"', description: 'Registro industrial de latão, PN 16, tipo gaveta, 2.1/2 polegadas. Para controle de fluxo em redes de hidrantes.', unit: 'Unidade', quantity: 1, price: 600.00, notes: 'Conforme NBR 13714.', icon: 'https://placehold.co/30x30/8B4513/FFFFFF?text=REG', suppliers: [] },
+                { category: 'Sistemas Hidráulicos e Acessórios', name: 'Luva Galvanizada 150 LBS', description: 'Luva galvanizada para conexões em tubulações, 150 LBS.', unit: 'Unidade', quantity: 5, price: 30.00, notes: 'Para conexões em tubulações galvanizadas.', icon: 'https://placehold.co/30x30/8B4513/FFFFFF?text=LUVA', suppliers: [] },
+                { category: 'Sistemas Hidráulicos e Acessórios', name: 'Niple Duplo Galvanizado 2.1/2"', description: 'Niple duplo galvanizado, 2.1/2 polegadas. Para conexões em tubulações.', unit: 'Unidade', quantity: 3, price: 45.00, notes: 'Para conexões em tubulações.', icon: 'https://placehold.co/30x30/8B4513/FFFFFF?text=NIP', suppliers: [] },
+                { category: 'Sistemas Hidráulicos e Acessórios', name: 'Cotovelo Galvanizado 90° Galvanizado 150 LBS', description: 'Cotovelo galvanizado 90 graus, 150 LBS. Para mudanças de direção em tubulações.', unit: 'Unidade', quantity: 4, price: 60.00, notes: 'Para mudanças de direção em tubulações.', icon: 'https://placehold.co/30x30/8B4513/FFFFFF?text=COTO', suppliers: [] },
+                { category: 'Sistemas Hidráulicos e Acessórios', name: 'Curva Galvanizada Fêmea 2.1/2"', description: 'Curva galvanizada com rosca fêmea, 2.1/2 polegadas. Para mudanças de direção em tubulações.', unit: 'Unidade', quantity: 2, price: 70.00, notes: 'Para mudanças de direção em tubulações.', icon: 'https://placehold.co/30x30/8B4513/FFFFFF?text=CURVA', suppliers: [] },
+                { category: 'Sistemas Hidráulicos e Acessórios', name: 'Esguicho Regulável Latão 1.1/2"', description: 'Esguicho regulável de latão para mangueira de 1.1/2 polegadas. Para controle do jato de água em hidrantes.', unit: 'Unidade', quantity: 1, price: 300.00, notes: 'Conforme NBR 13714.', icon: 'https://placehold.co/30x30/8B4513/FFFFFF?text=ESGUICHO', suppliers: [] },
+                { category: 'Sistemas Hidráulicos e Acessórios', name: 'Registro Globo Angular 45° Latão PN 16', description: 'Registro globo angular de latão, PN 16. Para uso em redes de hidrantes.', unit: 'Unidade', quantity: 1, price: 450.00, notes: 'Conforme NBR 13714.', icon: 'https://placehold.co/30x30/8B4513/FFFFFF?text=REG', suppliers: [] },
+                { category: 'Sistemas Hidráulicos e Acessórios', name: 'Válvula de Retenção Vertical 2.1/2"', description: 'Válvula de retenção vertical, 2.1/2 polegadas. Para evitar refluxo em sistemas hidráulicos.', unit: 'Unidade', quantity: 1, price: 550.00, notes: 'Conforme NBR 13714.', icon: 'https://placehold.co/30x30/8B4513/FFFFFF?text=VALV', suppliers: [] },
+                { category: 'Sistemas Hidráulicos e Acessórios', name: 'União Galvanizada 2.1/2" Assento Cônico', description: 'União galvanizada com assento cônico, 2.1/2 polegadas. Para conexões desmontáveis em tubulações.', unit: 'Unidade', quantity: 2, price: 80.00, notes: 'Para facilitar manutenção.', icon: 'https://placehold.co/30x30/8B4513/FFFFFF?text=UNIAO', suppliers: [] },
+                { category: 'Sistemas Hidráulicos e Acessórios', name: 'Pasta de Vedação', description: 'Pasta selante para roscas e conexões hidráulicas.', unit: 'Unidade', quantity: 1, price: 30.00, notes: 'Para garantir a estanqueidade das conexões.', icon: 'https://placehold.co/30x30/8B4513/FFFFFF?text=PASTA', suppliers: [] },
+                { category: 'Sistemas Hidráulicos e Acessórios', name: 'Te Galvanizado 150 LBS 2.1/2"', description: 'Conexão tipo "T" galvanizada, 150 LBS, 2.1/2 polegadas. Para derivações em tubulações.', unit: 'Unidade', quantity: 2, price: 70.00, notes: 'Para derivações em tubulações.', icon: 'https://placehold.co/30x30/8B4513/FFFFFF?text=TE', suppliers: [] },
+                { category: 'Sistemas Hidráulicos e Acessórios', name: 'Válvula de Retenção Horizontal 2.1/2"', description: 'Válvula de retenção horizontal, 2.1/2 polegadas. Para evitar refluxo em sistemas hidráulicos.', unit: 'Unidade', quantity: 1, price: 500.00, notes: 'Conforme NBR 13714.', icon: 'https://placehold.co/30x30/8B4513/FFFFFF?text=RET', suppliers: [] },
+                { category: 'Sistemas Hidráulicos e Acessórios', name: 'Válvula de Gaveta 2.1/2" ZF Normalizado', description: 'Válvula de gaveta com volante, 2.1/2 polegadas, normalizada. Para controle de fluxo em redes.', unit: 'Unidade', quantity: 1, price: 700.00, notes: 'Conforme NBR 13714.', icon: 'https://placehold.co/30x30/8B4513/FFFFFF?text=VALV', suppliers: [] },
+                { category: 'Sistemas Hidráulicos e Acessórios', name: 'Adaptador Storz 1.1/2" x 2.1/2"', description: 'Adaptador tipo Storz para mangueiras de 1.1/2" para 2.1/2". Conexão rápida para bombeiros.', unit: 'Unidade', quantity: 1, price: 150.00, notes: 'Conforme NBR 13714.', icon: 'https://placehold.co/30x30/4B0082/FFFFFF?text=ADAP', suppliers: [] },
+                { category: 'Sistemas Hidráulicos e Acessórios', name: 'Tampo Storz 2.1/2"', description: 'Tampo para conexão Storz de 2.1/2". Vedação de pontos de hidrante.', unit: 'Unidade', quantity: 1, price: 80.00, notes: 'Conforme NBR 13714.', icon: 'https://placehold.co/30x30/4B0082/FFFFFF?text=TAMPO', suppliers: [] },
+                { category: 'Sistemas Hidráulicos e Acessórios', name: 'Chave Storz 2.1/2"', description: 'Chave para acoplamento e desacoplamento de conexões Storz de 2.1/2". Ferramenta para operação de hidrantes.', unit: 'Unidade', quantity: 1, price: 70.00, notes: 'Essencial para manuseio de mangueiras.', icon: 'https://placehold.co/30x30/4B0082/FFFFFF?text=CHAVE', suppliers: [] },
+
+                // Sistemas de Detecção e Alarme
+                { category: 'Sistemas de Detecção e Alarme', name: 'Detector de Fumaça Endereçável', description: 'Detector óptico de fumaça com identificação de ponto na central.', unit: 'Unidade', quantity: 5, price: 220.00, notes: 'Para sistemas de detecção de incêndio (NBR 17240).', icon: 'https://placehold.co/30x30/4682B4/FFFFFF?text=DET', suppliers: [] },
+                { category: 'Sistemas de Detecção e Alarme', name: 'Central de Alarme de Incêndio (10 laços)', description: 'Central de alarme de incêndio endereçável com capacidade para 10 laços.', unit: 'Unidade', quantity: 1, price: 3500.00, notes: 'Conforme porte do sistema de detecção (NBR 17240).', icon: 'https://placehold.co/30x30/800080/FFFFFF?text=CEN', suppliers: [] },
+                { category: 'Sistemas de Detecção e Alarme', name: 'Sirene Audiovisual', description: 'Sirene com sinalização sonora e visual (flash). Para alerta geral.', unit: 'Unidade', quantity: 2, price: 180.00, notes: 'Conforme NBR 17240.', icon: 'https://placehold.co/30x30/FFA500/FFFFFF?text=SIR', suppliers: [] },
+                { category: 'Sistemas de Detecção e Alarme', name: 'Detector de Fumaça Convencional (421 Un Intelbras)', description: 'Detector de fumaça convencional, modelo 421 da Intelbras.', unit: 'Unidade', quantity: 1, price: 150.00, notes: 'Para sistemas de detecção convencionais (NBR 17240).', icon: 'https://placehold.co/30x30/4682B4/FFFFFF?text=DET', suppliers: [] },
+                { category: 'Sistemas de Detecção e Alarme', name: 'Central de Alarme Incêndio Endereçável Smart 125 I. C/ Bateria', description: 'Central de alarme de incêndio endereçável Smart 125 I com bateria.', unit: 'Unidade', quantity: 1, price: 4500.00, notes: 'Para sistemas de detecção de médio a grande porte (NBR 17240).', icon: 'https://placehold.co/30x30/800080/FFFFFF?text=CENTRAL', suppliers: [] },
+                { category: 'Sistemas de Detecção e Alarme', name: 'Cabo para Alarme de Incêndio (1.5 mm)', description: 'Cabo para circuitos de alarme de incêndio.', unit: 'Metro', quantity: 100, price: 4.50, notes: 'Conforme layout do sistema de detecção (NBR 17240).', icon: 'https://placehold.co/30x30/4682B4/FFFFFF?text=CABO', suppliers: [] },
+                { category: 'Sistemas de Detecção e Alarme', name: 'Sinalizador Audiovisual Endereçável', description: 'Sinalizador sonoro e visual endereçável. Para alerta em ambientes com ruído ou para pessoas com deficiência auditiva.', unit: 'Unidade', quantity: 2, price: 250.00, notes: 'Conforme NBR 17240.', icon: 'https://placehold.co/30x30/FFA500/FFFFFF?text=SINAL', suppliers: [] },
+                { category: 'Sistemas de Detecção e Alarme', name: 'Acionador Manual Endereçável', description: 'Acionador manual de alarme de incêndio endereçável. Para acionamento manual do alarme.', unit: 'Unidade', quantity: 3, price: 180.00, notes: 'Conforme NBR 17240.', icon: 'https://placehold.co/30x30/FF4500/FFFFFF?text=ACIO', suppliers: [] },
+
+                // Sinalização de Emergência (Placas)
+                { category: 'Sinalização de Emergência (Placas)', name: 'Luminária de Emergência (Autônoma)', description: 'Luminária com bateria interna para rotas de fuga. Garante visibilidade em caso de falta de energia.', unit: 'Unidade', quantity: 5, price: 120.00, notes: 'Conforme NBR 10898.', icon: 'https://placehold.co/30x30/008000/FFFFFF?text=LUM', suppliers: [] },
+                { category: 'Sinalização de Emergência (Placas)', name: 'Placa Fotoluminescente - S-09 (Saída) (15x30)', description: 'Placa de sinalização fotoluminescente S-09 (Saída de Emergência), 15x30 cm.', unit: 'Unidade', quantity: 1, price: 55.00, notes: 'Conforme NBR 13434-2.', icon: 'https://placehold.co/30x30/008000/FFFFFF?text=S-09', suppliers: [] },
+                { category: 'Sinalização de Emergência (Placas)', name: 'Placa Fotoluminescente - S-10 (Saída) (15x30)', description: 'Placa de sinalização fotoluminescente S-10 (Saída de Emergência), 15x30 cm.', unit: 'Unidade', quantity: 1, price: 55.00, notes: 'Conforme NBR 13434-2.', icon: 'https://placehold.co/30x30/008000/FFFFFF?text=S-10', suppliers: [] },
+                { category: 'Sinalização de Emergência (Placas)', name: 'Placa Fotoluminescente - S-11 (Saída) (15x30)', description: 'Placa de sinalização fotoluminescente S-11 (Saída de Emergência), 15x30 cm.', unit: 'Unidade', quantity: 1, price: 55.00, notes: 'Conforme NBR 13434-2.', icon: 'https://placehold.co/30x30/008000/FFFFFF?text=S-11', suppliers: [] },
+                { category: 'Sinalização de Emergência (Placas)', name: 'Placa Fotoluminescente - S-12 (Saída) (15x30)', description: 'Placa de sinalização fotoluminescente S-12 (Saída de Emergência), 15x30 cm.', unit: 'Unidade', quantity: 1, price: 55.00, notes: 'Conforme NBR 13434-2.', icon: 'https://placehold.co/30x30/008000/FFFFFF?text=S-12', suppliers: [] },
+                { category: 'Sinalização de Emergência (Placas)', name: 'Placa Fotoluminescente - S-13 (Saída) (15x30)', description: 'Placa de sinalização fotoluminescente S-13 (Saída de Emergência), 15x30 cm.', unit: 'Unidade', quantity: 1, price: 55.00, notes: 'Conforme NBR 13434-2.', icon: 'https://placehold.co/30x30/008000/FFFFFF?text=S-13', suppliers: [] },
+                { category: 'Sinalização de Emergência (Placas)', name: 'Placa Fotoluminescente - S-14 (Saída) (15x30)', description: 'Placa de sinalização fotoluminescente S-14 (Saída de Emergência), 15x30 cm.', unit: 'Unidade', quantity: 1, price: 55.00, notes: 'Conforme NBR 13434-2.', icon: 'https://placehold.co/30x30/008000/FFFFFF?text=S-14', suppliers: [] },
+                { category: 'Sinalização de Emergência (Placas)', name: 'Placa Fotoluminescente - S-15 (Saída) (15x30)', description: 'Placa de sinalização fotoluminescente S-15 (Saída de Emergência), 15x30 cm.', unit: 'Unidade', quantity: 1, price: 55.00, notes: 'Conforme NBR 13434-2.', icon: 'https://placehold.co/30x30/008000/FFFFFF?text=S-15', suppliers: [] },
+                { category: 'Sinalização de Emergência (Placas)', name: 'Placa Fotoluminescente - S-16 (Saída) (15x30)', description: 'Placa de sinalização fotoluminescente S-16 (Saída de Emergência), 15x30 cm.', unit: 'Unidade', quantity: 1, price: 55.00, notes: 'Conforme NBR 13434-2.', icon: 'https://placehold.co/30x30/008000/FFFFFF?text=S-16', suppliers: [] },
+                { category: 'Sinalização de Emergência (Placas)', name: 'Placa Fotoluminescente - S-17 (Saída) (15x30)', description: 'Placa de sinalização fotoluminescente S-17 (Saída de Emergência), 15x30 cm.', unit: 'Unidade', quantity: 1, price: 55.00, notes: 'Conforme NBR 13434-2.', icon: 'https://placehold.co/30x30/008000/FFFFFF?text=S-17', suppliers: [] },
+                { category: 'Sinalização de Emergência (Placas)', name: 'Placa Fotoluminescente - S-18 (Saída) (15x30)', description: 'Placa de sinalização fotoluminescente S-18 (Saída de Emergência), 15x30 cm.', unit: 'Unidade', quantity: 1, price: 55.00, notes: 'Conforme NBR 13434-2.', icon: 'https://placehold.co/30x30/008000/FFFFFF?text=S-18', suppliers: [] },
+                { category: 'Sinalização de Emergência (Placas)', name: 'Placa Fotoluminescente - E-01 (Extintor) (15x30)', description: 'Placa de identificação de extintor de incêndio.', unit: 'Unidade', quantity: 3, price: 55.00, notes: 'Conforme NBR 13434-2.', icon: 'https://placehold.co/30x30/FF0000/FFFFFF?text=E-01', suppliers: [] },
+                { category: 'Sinalização de Emergência (Placas)', name: 'Placa Fotoluminescente - E-02 (Hidrante) (15x30)', description: 'Placa de identificação de hidrante.', unit: 'Unidade', quantity: 1, price: 55.00, notes: 'Conforme NBR 13434-2.', icon: 'https://placehold.co/30x30/FF0000/FFFFFF?text=E-02', suppliers: [] },
+                { category: 'Sinalização de Emergência (Placas)', name: 'Placa Fotoluminescente - E-03 (Alarme) (15x30)', description: 'Placa de identificação de acionador manual de alarme.', unit: 'Unidade', quantity: 2, price: 55.00, notes: 'Conforme NBR 13434-2.', icon: 'https://placehold.co/30x30/FF0000/FFFFFF?text=E-03', suppliers: [] },
+                { category: 'Sinalização de Emergência (Placas)', name: 'Placa Fotoluminescente - E-11 (Abrigo Mangueira) (15x30)', description: 'Placa de sinalização fotoluminescente E-11 (Abrigo de Mangueira), 15x30 cm.', unit: 'Unidade', quantity: 1, price: 55.00, notes: 'Conforme NBR 13434-2.', icon: 'https://placehold.co/30x30/FF0000/FFFFFF?text=E-11', suppliers: [] },
+                { category: 'Sinalização de Emergência (Placas)', name: 'Placa Fotoluminescente - E-12 (Bomba Incêndio) (15x30)', description: 'Placa de sinalização fotoluminescente E-12 (Bomba de Incêndio), 15x30 cm.', unit: 'Unidade', quantity: 1, price: 55.00, notes: 'Conforme NBR 13434-2.', icon: 'https://placehold.co/30x30/FF0000/FFFFFF?text=E-12', suppliers: [] },
+                { category: 'Sinalização de Emergência (Placas)', name: 'Placa Fotoluminescente - E-13 (Central Alarme) (15x30)', description: 'Placa de sinalização fotoluminescente E-13 (Central de Alarme), 15x30 cm.', unit: 'Unidade', quantity: 1, price: 55.00, notes: 'Conforme NBR 13434-2.', icon: 'https://placehold.co/30x30/FF0000/FFFFFF?text=E-13', suppliers: [] },
+                { category: 'Sinalização de Emergência (Placas)', name: 'Placa Fotoluminescente - E-14 (Chuveiro Auto) (15x30)', description: 'Placa de sinalização fotoluminescente E-14 (Chuveiro Automático), 15x30 cm.', unit: 'Unidade', quantity: 1, price: 55.00, notes: 'Conforme NBR 13434-2.', icon: 'https://placehold.co/30x30/FF0000/FFFFFF?text=E-14', suppliers: [] },
+                { category: 'Sinalização de Emergência (Placas)', name: 'Placa Fotoluminescente - E-15 (Telefone Emerg) (15x30)', description: 'Placa de sinalização fotoluminescente E-15 (Telefone de Emergência), 15x30 cm.', unit: 'Unidade', quantity: 1, price: 55.00, notes: 'Conforme NBR 13434-2.', icon: 'https://placehold.co/30x30/FF0000/FFFFFF?text=E-15', suppliers: [] },
+                { category: 'Sinalização de Emergência (Placas)', name: 'Placa Fotoluminescente - E-16 (Manta Corta-Fogo) (15x30)', description: 'Placa de sinalização fotoluminescente E-16 (Manta Corta-Fogo), 15x30 cm.', unit: 'Unidade', quantity: 1, price: 55.00, notes: 'Conforme NBR 13434-2.', icon: 'https://placehold.co/30x30/FF0000/FFFFFF?text=E-16', suppliers: [] },
+                { category: 'Sinalização de Emergência (Placas)', name: 'Placa Fotoluminescente - E-17 (Bomba Incêndio) (15x30)', description: 'Placa de sinalização fotoluminescente E-17 (Bomba de Incêndio), 15x30 cm.', unit: 'Unidade', quantity: 1, price: 55.00, notes: 'Conforme NBR 13434-2.', icon: 'https://placehold.co/30x30/FF0000/FFFFFF?text=E-17', suppliers: [] },
+                { category: 'Sinalização de Emergência (Placas)', name: 'Placa Fotoluminescente - E-19 (Central GLP) (15x30)', description: 'Placa de sinalização fotoluminescente E-19 (Central de GLP), 15x30 cm.', unit: 'Unidade', quantity: 1, price: 55.00, notes: 'Conforme NBR 13434-2.', icon: 'https://placehold.co/30x30/FF0000/FFFFFF?text=E-19', suppliers: [] },
+                { category: 'Sinalização de Emergência (Placas)', name: 'Placa Fotoluminescente - E-20 (Sala Bomba) (15x30)', description: 'Placa de sinalização fotoluminescente E-20 (Sala de Bomba), 15x30 cm.', unit: 'Unidade', quantity: 1, price: 55.00, notes: 'Conforme NBR 13434-2.', icon: 'https://placehold.co/30x30/FF0000/FFFFFF?text=E-20', suppliers: [] },
+                { category: 'Sinalização de Emergência (Placas)', name: 'Placa Fotoluminescente - E-21 (Válvula Incêndio) (15x30)', description: 'Placa de sinalização fotoluminescente E-21 (Válvula de Incêndio), 15x30 cm.', unit: 'Unidade', quantity: 1, price: 55.00, notes: 'Conforme NBR 13434-2.', icon: 'https://placehold.co/30x30/FF0000/FFFFFF?text=E-21', suppliers: [] },
+                { category: 'Sinalização de Emergência (Placas)', name: 'Placa Fotoluminescente - A-2 (Risco Incêndio) (30x50)', description: 'Placa de sinalização fotoluminescente A-2 (Risco de Incêndio), 30x50 cm.', unit: 'Unidade', quantity: 1, price: 80.00, notes: 'Conforme NBR 13434-2.', icon: 'https://placehold.co/30x30/FF0000/FFFFFF?text=A-2', suppliers: [] },
+                { category: 'Sinalização de Emergência (Placas)', name: 'Placa Fotoluminescente - A-5 (Perigo Explosão) (30x50)', description: 'Placa de sinalização fotoluminescente A-5 (Perigo de Explosão), 30x50 cm.', unit: 'Unidade', quantity: 1, price: 80.00, notes: 'Conforme NBR 13434-2.', icon: 'https://placehold.co/30x30/FF0000/FFFFFF?text=A-5', suppliers: [] },
+                { category: 'Sinalização de Emergência (Placas)', name: 'Placa Fotoluminescente - M-01 (Proibido Obstaculizar) (30x50)', description: 'Placa de sinalização fotoluminescente M-01 (Proibido Obstaculizar), 30x50 cm.', unit: 'Unidade', quantity: 1, price: 80.00, notes: 'Conforme NBR 13434-2.', icon: 'https://placehold.co/30x30/0000FF/FFFFFF?text=M-01', suppliers: [] },
+                { category: 'Sinalização de Emergência (Placas)', name: 'Placa Fotoluminescente - M-02 (Ação Obrigatória) (30x50)', description: 'Placa de sinalização fotoluminescente M-02 (Ação Obrigatória), 30x50 cm.', unit: 'Unidade', quantity: 1, price: 80.00, notes: 'Conforme NBR 13434-2.', icon: 'https://placehold.co/30x30/0000FF/FFFFFF?text=M-02', suppliers: [] },
+                { category: 'Sinalização de Emergência (Placas)', name: 'Placa Fotoluminescente - M-03 (Primeiros Socorros) (30x50)', description: 'Placa de sinalização fotoluminescente M-03 (Primeiros Socorros), 30x50 cm.', unit: 'Unidade', quantity: 1, price: 80.00, notes: 'Conforme NBR 13434-2.', icon: 'https://placehold.co/30x30/0000FF/FFFFFF?text=M-03', suppliers: [] },
+                { category: 'Sinalização de Emergência (Placas)', name: 'Placa Fotoluminescente - P-1 (Proibido Fumar) (15x30)', description: 'Placa de sinalização fotoluminescente P-1 (Proibido Fumar), 15x30 cm.', unit: 'Unidade', quantity: 1, price: 55.00, notes: 'Conforme NBR 13434-2.', icon: 'https://placehold.co/30x30/FF0000/FFFFFF?text=P-1', suppliers: [] },
+                { category: 'Sinalização de Emergência (Placas)', name: 'Placa Fotoluminescente - P-2 (Proibido Usar Água) (15x30)', description: 'Placa de sinalização fotoluminescente P-2 (Proibido Usar Água), 15x30 cm.', unit: 'Unidade', quantity: 1, price: 55.00, notes: 'Conforme NBR 13434-2, para locais com risco elétrico ou produtos reativos.', icon: 'https://placehold.co/30x30/FF0000/FFFFFF?text=P-2', suppliers: [] },
+                { category: 'Sinalização de Emergência (Placas)', name: 'Placa Fotoluminescente - P-3 (Proibido Acender Fogo) (15x30)', description: 'Placa de sinalização fotoluminescente P-3 (Proibido Acender Fogo), 15x30 cm.', unit: 'Unidade', quantity: 1, price: 55.00, notes: 'Conforme NBR 13434-2.', icon: 'https://placehold.co/30x30/FF0000/FFFFFF?text=P-3', suppliers: [] },
+
+                // Elementos de Compartimentação e Rotas de Fuga
+                { category: 'Elementos de Compartimentação e Rotas de Fuga', name: 'Porta Corta Fogo Simples (0.80x2.10 TRP P90 C/ Dobradiça e Fechadura)', description: 'Porta corta-fogo simples, 0.80x2.10m, TRP P90 (90 minutos de resistência ao fogo), completa com dobradiça e fechadura.', unit: 'Unidade', quantity: 1, price: 2500.00, notes: 'Para compartimentação e rotas de fuga (NBR 11742).', icon: 'https://placehold.co/30x30/8B4513/FFFFFF?text=PORTA', suppliers: [] },
+
+                // Sistemas de Proteção contra Descargas Atmosféricas (SPDA)
+                { category: 'Sistemas de Proteção contra Descargas Atmosféricas (SPDA)', name: 'Cabo de Cobre Nu (25mm²)', description: 'Cabo de cobre para captação e descidas do SPDA.', unit: 'Metro', quantity: 50, price: 22.00, notes: 'Conforme área e altura da edificação (NBR 5419).', icon: 'https://placehold.co/30x30/4B0082/FFFFFF?text=CABO', suppliers: [] },
+                { category: 'Sistemas de Proteção contra Descargas Atmosféricas (SPDA)', name: 'Cabo de Cobre Nu 35 mm² (ZF Normalizado)', description: 'Cabo de cobre nu, 35 mm², normalizado para SPDA.', unit: 'Metro', quantity: 50, price: 30.00, notes: 'Para captação e descidas do SPDA (NBR 5419).', icon: 'https://placehold.co/30x30/4B0082/FFFFFF?text=CABO', suppliers: [] },
+                { category: 'Sistemas de Proteção contra Descargas Atmosféricas (SPDA)', name: 'Haste de Aterramento (2.4m)', description: 'Haste de cobre para o sistema de aterramento.', unit: 'Unidade', quantity: 3, price: 110.00, notes: 'Número de hastes conforme projeto de aterramento (NBR 5419).', icon: 'https://placehold.co/30x30/8A2BE2/FFFFFF?text=HAS', suppliers: [] },
+                { category: 'Sistemas de Proteção contra Descargas Atmosféricas (SPDA)', name: 'Conector (Diversos)', description: 'Conectores para cabos, hastes, etc. (ex: grampos, solda exotérmica).', unit: 'Unidade', quantity: 10, price: 30.00, notes: 'Variável conforme pontos de conexão (NBR 5419).', icon: 'https://placehold.co/30x30/4169E1/FFFFFF?text=CON', suppliers: [] },
+                { category: 'Sistemas de Proteção contra Descargas Atmosféricas (SPDA)', name: 'Caixa de Inspeção de Aterramento', description: 'Caixa para inspeção da conexão do aterramento.', unit: 'Unidade', quantity: 1, price: 180.00, notes: 'Para cada ponto de descida ou aterramento (NBR 5419).', icon: 'https://placehold.co/30x30/1E90FF/FFFFFF?text=CAIXA', suppliers: [] },
+                { category: 'Sistemas de Proteção contra Descargas Atmosféricas (SPDA)', name: 'Suporte para Cabo (Fixador)', description: 'Fixadores para condutores de descida e captação.', unit: 'Unidade', quantity: 20, price: 10.00, notes: 'Conforme espaçamento necessário (NBR 5419).', icon: 'https://placehold.co/30x30/6A5ACD/FFFFFF?text=SUP', suppliers: [] },
+                { category: 'Sistemas de Proteção contra Descargas Atmosféricas (SPDA)', name: 'Barra Chata Alumínio (7/8x1/8 cm) (Sistema para Raio)', description: 'Barra chata de alumínio para sistema de captação de SPDA.', unit: 'Metro', quantity: 10, price: 40.00, notes: 'Para captação em telhados ou para-raios (NBR 5419).', icon: 'https://placehold.co/30x30/4B0082/FFFFFF?text=BARRA', suppliers: [] },
+                { category: 'Sistemas de Proteção contra Descargas Atmosféricas (SPDA)', name: 'Suporte Isolador para Barra de Alumínio e Fio de Cobre', description: 'Suporte isolador para fixação de barras e fios de cobre.', unit: 'Unidade', quantity: 15, price: 25.00, notes: 'Para isolamento elétrico e fixação (NBR 5419).', icon: 'https://placehold.co/30x30/4B0082/FFFFFF?text=SUP', suppliers: [] },
+                { category: 'Sistemas de Proteção contra Descargas Atmosféricas (SPDA)', name: 'Terminal de Compressão 35 mm²', description: 'Terminal para conexão de cabos de 35 mm² por compressão.', unit: 'Unidade', quantity: 5, price: 15.00, notes: 'Para conexões seguras (NBR 5419).', icon: 'https://placehold.co/30x30/4B0082/FFFFFF?text=TERM', suppliers: [] },
+                { category: 'Sistemas de Proteção contra Descargas Atmosféricas (SPDA)', name: 'Terminal de Compressão 16mm²', description: 'Terminal para conexão de cabos de 16 mm² por compressão.', unit: 'Unidade', quantity: 5, price: 10.00, notes: 'Para conexões de cabos menores (NBR 5419).', icon: 'https://placehold.co/30x30/4B0082/FFFFFF?text=TERM', suppliers: [] },
+                { category: 'Sistemas de Proteção contra Descargas Atmosféricas (SPDA)', name: 'Suporte para Sustentação dos Tubos na Parede', description: 'Suporte para fixar tubos de descida do SPDA na parede.', unit: 'Unidade', quantity: 10, price: 20.00, notes: 'Para fixação das descidas do SPDA (NBR 5419).', icon: 'https://placehold.co/30x30/4B0082/FFFFFF?text=SUP', suppliers: [] },
+                { category: 'Sistemas de Proteção contra Descargas Atmosféricas (SPDA)', name: 'Abraçadeiras Tipo "U" para Fixar Tubos', description: 'Abraçadeiras em formato "U" para fixação de tubos.', unit: 'Unidade', quantity: 10, price: 12.00, notes: 'Para fixação de tubos em general.', icon: 'https://placehold.co/30x30/4B0082/FFFFFF?text=ABR', suppliers: [] },
+                { category: 'Sistemas de Proteção contra Descargas Atmosféricas (SPDA)', name: 'Mastro Galvanizado de 2.5m para Sistema de Para Raio', description: 'Mastro galvanizado de 2.5 metros para suporte de captores de SPDA.', unit: 'Unidade', quantity: 1, price: 300.00, notes: 'Para instalação de captores de SPDA (NBR 5419).', icon: 'https://placehold.co/30x30/4B0082/FFFFFF?text=MASTO', suppliers: [] },
+                { category: 'Sistemas de Proteção contra Descargas Atmosféricas (SPDA)', name: 'Captor Franklin (4 Pontas Aço Inox)', description: 'Captor tipo Franklin com 4 pontas em aço inoxidável.', unit: 'Unidade', quantity: 1, price: 400.00, notes: 'Para sistema de proteção por para-raios (NBR 5419).', icon: 'https://placehold.co/30x30/4B0082/FFFFFF?text=CAPTOR', suppliers: [] },
+                { category: 'Sistemas de Proteção contra Descargas Atmosféricas (SPDA)', name: 'Conjunto de Balizamento de Topo (2 Luminária Verm.)', description: 'Conjunto de balizamento de topo com duas luminárias vermelhas.', unit: 'Conjunto', quantity: 1, price: 600.00, notes: 'Para sinalização de obstáculos em altura (NBR 5419).', icon: 'https://placehold.co/30x30/4B0082/FFFFFF?text=CONJ', suppliers: [] },
+
+                // Sistemas de Bomba de Incêndio (NOVA CATEGORIA)
+                { category: 'Sistemas de Bomba de Incêndio', name: 'Bomba Principal de Incêndio (Diesel/Elétrica)', description: 'Bomba centrífuga de alta vazão para sistema de combate a incêndio, conforme NBR 13714.', unit: 'Unidade', quantity: 1, price: 18000.00, notes: 'Potência e vazão conforme projeto.', icon: 'https://placehold.co/30x30/8B0000/FFFFFF?text=BOMBAP', suppliers: [] },
+                { category: 'Sistemas de Bomba de Incêndio', name: 'Bomba Jockey (Manutenção de Pressão)', description: 'Bomba de pequena vazão para manter a pressão da rede, evitando acionamento da bomba principal.', unit: 'Unidade', quantity: 1, price: 2500.00, notes: 'Essencial para a vida útil do sistema.', icon: 'https://placehold.co/30x30/8B0000/FFFFFF?text=JOCKEY', suppliers: [] },
+                { category: 'Sistemas de Bomba de Incêndio', name: 'Painel de Comando para Bombas de Incêndio', description: 'Painel elétrico de controle e automação para as bombas principal e jockey, com sinalização e proteção.', unit: 'Unidade', quantity: 1, price: 4000.00, notes: 'Conforme NBR 13714 e normas elétricas.', icon: 'https://placehold.co/30x30/8B0000/FFFFFF?text=PAINEL', suppliers: [] },
+                { category: 'Sistemas de Bomba de Incêndio', name: 'Válvula de Retenção (Flangeada)', description: 'Válvula para evitar o retorno do fluxo de água na tubulação, flangeada para alta pressão.', unit: 'Unidade', quantity: 2, price: 700.00, notes: 'Para sucção e recalque da bomba.', icon: 'https://placehold.co/30x30/8B0000/FFFFFF?text=VALVRET', suppliers: [] },
+                { category: 'Sistemas de Bomba de Incêndio', name: 'Válvula de Gaveta (Flangeada)', description: 'Válvula de bloqueio de fluxo, flangeada, para isolamento e manutenção do sistema de bombas.', unit: 'Unidade', quantity: 2, price: 850.00, notes: 'Para isolamento da bomba.', icon: 'https://placehold.co/30x30/8B0000/FFFFFF?text=VALVGAV', suppliers: [] },
+                { category: 'Sistemas de Bomba de Incêndio', name: 'Manômetro com Válvula de Bloqueio', description: 'Instrumento para medição de pressão na tubulação da bomba, com válvula para isolamento.', unit: 'Unidade', quantity: 2, price: 150.00, notes: 'Para monitoramento da pressão.', icon: 'https://placehold.co/30x30/8B0000/FFFFFF?text=MANOM', suppliers: [] },
+                { category: 'Sistemas de Bomba de Incêndio', name: 'Pressostato (Pressão Mínima/Máxima)', description: 'Dispositivo que aciona/desaciona a bomba com base nos limites de pressão configurados.', unit: 'Unidade', quantity: 2, price: 300.00, notes: 'Para automação do sistema.', icon: 'https://placehold.co/30x30/8B0000/FFFFFF?text=PRESS', suppliers: [] },
+                { category: 'Sistemas de Bomba de Incêndio', name: 'Tubulação de Aço Carbono (Sch 40)', description: 'Tubulação robusta para alta pressão, utilizada na interligação das bombas e rede principal.', unit: 'Metro', quantity: 10, price: 120.00, notes: 'Diâmetro conforme dimensionamento.', icon: 'https://placehold.co/30x30/8B0000/FFFFFF?text=TUBOACO', suppliers: [] },
+                { category: 'Sistemas de Bomba de Incêndio', name: 'Flanges e Conexões (Kit)', description: 'Conjunto de flanges, parafusos, porcas e gaxetas para conexão da bomba à tubulação.', unit: 'Kit', quantity: 1, price: 400.00, notes: 'Para instalação completa.', icon: 'https://placehold.co/30x30/8B0000/FFFFFF?text=FLANGE', suppliers: [] },
+                { category: 'Sistemas de Bomba de Incêndio', name: 'Base Metálica para Bomba', description: 'Base de aço robusta para fixação e nivelamento da bomba, absorvendo vibrações.', unit: 'Unidade', quantity: 1, price: 900.00, notes: 'Para estabilidade da bomba.', icon: 'https://placehold.co/30x30/8B0000/FFFFFF?text=BASE', suppliers: [] },
+                { category: 'Sistemas de Bomba de Incêndio', name: 'Válvula de Alívio de Pressão', description: 'Válvula de segurança para liberar excesso de pressão na linha de recalque da bomba.', unit: 'Unidade', quantity: 1, price: 600.00, notes: 'Proteção contra sobrepressão.', icon: 'https://placehold.co/30x30/8B0000/FFFFFF?text=ALIVIO', suppliers: [] },
+
+
+                // Serviços e Deslocamento
+                { category: 'Serviços e Deslocamento', name: 'Diária de Equipe (Instalação)', description: 'Custo da diária de equipe de instalação (ex: 2 técnicos + veículo).', unit: 'Diária', quantity: 2, price: 1200.00, notes: 'Estimativa de dias necessários para instalação.', icon: 'https://placehold.co/30x30/6B46C1/FFFFFF?text=EQUIPE', suppliers: [] },
+                { category: 'Serviços e Deslocamento', name: 'Deslocamento por KM (Veículo)', description: 'Custo por quilômetro rodado para deslocamento da equipe.', unit: 'Km', quantity: 50, price: 3.00, notes: 'Considerar ida e volta.', icon: 'https://placehold.co/30x30/3182CE/FFFFFF?text=KM', suppliers: [] },
+            ];
+
+            // Function to render the budget table from the budgetItems array
+            function renderBudgetTable() {
+                tableBody.innerHTML = ''; // Clear existing rows
+                let currentCategory = '';
+
+                budgetItems.forEach((item, index) => {
+                    // Add category header if it's a new category
+                    if (item.category !== currentCategory) {
+                        const categoryRow = document.createElement('tr');
+                        categoryRow.innerHTML = `<td class="category-header py-3 px-4" colspan="8">${item.category}</td>`;
+                        tableBody.appendChild(categoryRow);
+                        currentCategory = item.category;
+                    }
+
+                    const row = document.createElement('tr');
+                    row.setAttribute('data-item-type', item.type); // Keep this for potential future filtering if needed
+                    row.setAttribute('data-item-index', index); // Store index for easy lookup
+
+                    row.innerHTML = `
+                        <td class="py-2 px-4"></td>
+                        <td class="py-2 px-4 item-name-cell">
+                            <img src="https://placehold.co/30x30/FF0000/FFFFFF?text=ICON" alt="${item.name}" class="item-icon">
+                            ${item.name}
+                            <button class="view-suppliers-btn" data-item-index="${index}" title="Ver Fornecedores">📊</button>
+                        </td>
+                        <td class="py-2 px-4">${item.description}</td>
+                        <td class="py-2 px-4">${item.unit}</td>
+                        <td class="py-2 px-4"><input type="number" value="${item.quantity}" min="0" data-quantity></td>
+                        <td class="py-2 px-4"><input type="number" value="${item.price.toFixed(2)}" min="0" step="0.01" data-price></td>
+                        <td class="py-2 px-4 subtotal-cell">0.00</td>
+                        <td class="py-2 px-4">${item.notes}</td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+
+                // Re-attach event listeners after rendering
+                attachEventListeners();
+                calculateTotals();
+            }
+
+            // Function to calculate subtotal for a row
+            function calculateRowSubtotal(row) {
+                const quantityInput = row.querySelector('[data-quantity]');
+                const priceInput = row.querySelector('[data-price]');
+                const subtotalCell = row.querySelector('.subtotal-cell');
+
+                const quantity = parseFloat(quantityInput.value) || 0;
+                const price = parseFloat(priceInput.value) || 0;
+                const subtotal = quantity * price;
+
+                subtotalCell.textContent = subtotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                return subtotal;
+            }
+
+            // Function to calculate and update all totals
+            function calculateTotals() {
+                let materialsServicesTotal = 0;
+                const rows = tableBody.querySelectorAll('tr[data-item-type]');
+                rows.forEach(row => {
+                    materialsServicesTotal += calculateRowSubtotal(row);
+                });
+                materialsServicesTotalCell.textContent = materialsServicesTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+                const bdiPercentage = parseFloat(bdiPercentageInput.value) || 0;
+                const bdiAmount = materialsServicesTotal * (bdiPercentage / 100);
+                bdiTotalCell.textContent = bdiAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+                const grandTotal = materialsServicesTotal + bdiAmount;
+                grandTotalCell.textContent = grandTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            }
+
+            // Function to attach event listeners to dynamically created elements
+            function attachEventListeners() {
+                // Event listeners for quantity and price inputs
+                tableBody.querySelectorAll('input[type="number"]').forEach(input => {
+                    input.removeEventListener('input', calculateTotals); // Remove old listeners to prevent duplicates
+                    input.addEventListener('input', function() {
+                        const rowIndex = this.closest('tr').getAttribute('data-item-index');
+                        budgetItems[rowIndex].quantity = parseFloat(this.closest('tr').querySelector('[data-quantity]').value);
+                        budgetItems[rowIndex].price = parseFloat(this.closest('tr').querySelector('[data-price]').value);
+                        calculateTotals();
+                    });
+                });
+
+                // Event listeners for "View Suppliers" buttons
+                tableBody.querySelectorAll('.view-suppliers-btn').forEach(button => {
+                    button.removeEventListener('click', openSupplierModal); // Remove old listeners
+                    button.addEventListener('click', openSupplierModal);
+                });
+            }
+
+            // Function to open the supplier modal
+            function openSupplierModal(event) {
+                currentItemIndex = parseInt(event.currentTarget.getAttribute('data-item-index'));
+                const item = budgetItems[currentItemIndex];
+
+                modalItemName.textContent = `Fornecedores para: ${item.name}`;
+                renderSupplierList(item.suppliers);
+                supplierModal.style.display = 'flex'; // Use flex to center
+            }
+
+            // Function to render the list of suppliers in the modal
+            function renderSupplierList(suppliers) {
+                supplierList.innerHTML = '';
+                if (suppliers.length === 0) {
+                    supplierList.innerHTML = '<p class="text-gray-500 text-center py-4">Nenhum fornecedor adicionado para este item.</p>';
+                    return;
+                }
+                suppliers.forEach((supplier, supIndex) => {
+                    const supplierDiv = document.createElement('div');
+                    supplierDiv.classList.add('supplier-item');
+                    supplierDiv.innerHTML = `
+                        <div>
+                            <p class="font-semibold">${supplier.name} - ${supplier.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                            <p class="text-sm text-gray-600">Contato: ${supplier.contact || 'N/A'}</p>
+                            ${supplier.notes ? `<p class="text-xs text-gray-500">Obs: ${supplier.notes}</p>` : ''}
+                        </div>
+                        <button data-supplier-index="${supIndex}">Usar Preço</button>
+                    `;
+                    supplierList.appendChild(supplierDiv);
+                });
+
+                // Add event listeners to "Usar Preço" buttons
+                supplierList.querySelectorAll('button').forEach(button => {
+                    button.addEventListener('click', function() {
+                        const supIndex = parseInt(this.getAttribute('data-supplier-index'));
+                        const selectedPrice = suppliers[supIndex].price;
+                        budgetItems[currentItemIndex].price = selectedPrice; // Update item's price
+                        renderBudgetTable(); // Re-render table to update price input
+                        supplierModal.style.display = 'none'; // Close modal
+                    });
+                });
+            }
+
+            // Event listener for adding a new supplier (in item modal)
+            addSupplierButton.addEventListener('click', function() {
+                const name = newSupplierNameInput.value.trim();
+                const price = parseFloat(newSupplierPriceInput.value);
+                const contact = newSupplierContactInput.value.trim();
+                const notes = newSupplierNotesInput.value.trim();
+
+                if (name && !isNaN(price) && price >= 0) {
+                    budgetItems[currentItemIndex].suppliers.push({ name, price, contact, notes });
+                    renderSupplierList(budgetItems[currentItemIndex].suppliers);
+                    // Clear form fields
+                    newSupplierNameInput.value = '';
+                    newSupplierPriceInput.value = '';
+                    newSupplierContactInput.value = '';
+                    newSupplierNotesInput.value = '';
+                } else {
+                    console.error('Por favor, insira um nome e um preço válido para o fornecedor.');
+                }
+            });
+
+            // Close modal when close button is clicked
+            closeButton.addEventListener('click', function() {
+                supplierModal.style.display = 'none';
+            });
+
+            // Close modal when clicking outside of it
+            window.addEventListener('click', function(event) {
+                if (event.target === supplierModal) {
+                    supplierModal.style.display = 'none';
+                }
+            });
+
+            // Event listener for BDI percentage input
+            bdiPercentageInput.addEventListener('input', calculateTotals);
+
+            // --- Main Suppliers (Editable Footer) Functions ---
+            function renderMainSuppliers() {
+                editableSupplierList.innerHTML = '';
+                mainSuppliersData.forEach((supplier, index) => {
+                    const supplierDiv = document.createElement('div');
+                    supplierDiv.classList.add('editable-supplier-item');
+                    supplierDiv.innerHTML = `
+                        ${supplier.logo ? `<img src="${supplier.logo}" alt="${supplier.name} logo" class="supplier-logo">` : ''}
+                        <input type="text" value="${supplier.name}" data-supplier-index="${index}" class="supplier-name-input">
+                        <button class="remove-supplier-btn pdf-hide" data-supplier-index="${index}">x</button>
+                    `;
+                    editableSupplierList.appendChild(supplierDiv);
+                });
+
+                // Attach event listeners for name changes and removals
+                editableSupplierList.querySelectorAll('.supplier-name-input').forEach(input => {
+                    input.addEventListener('input', function() {
+                        const index = parseInt(this.getAttribute('data-supplier-index'));
+                        mainSuppliersData[index].name = this.value;
+                    });
+                });
+
+                editableSupplierList.querySelectorAll('.remove-supplier-btn').forEach(button => {
+                    button.addEventListener('click', function() {
+                        const index = parseInt(this.getAttribute('data-supplier-index'));
+                        mainSuppliersData.splice(index, 1);
+                        renderMainSuppliers(); // Re-render the list
+                    });
+                });
+            }
+
+            addNewSupplierButton.addEventListener('click', function() {
+                const name = newSupplierNameInputMain.value.trim();
+                const file = newSupplierLogoInputMain.files[0];
+                let logoUrl = '';
+
+                if (name) {
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            logoUrl = e.target.result;
+                            mainSuppliersData.push({ name, logo: logoUrl });
+                            renderMainSuppliers();
+                            newSupplierNameInputMain.value = '';
+                            newSupplierLogoInputMain.value = ''; // Clear file input
+                        };
+                        reader.readAsDataURL(file);
+                    } else {
+                        mainSuppliersData.push({ name, logo: 'https://placehold.co/24x24/CCCCCC/000000?text=?' }); // Default placeholder if no logo
+                        renderMainSuppliers();
+                        newSupplierNameInputMain.value = '';
+                    }
+                } else {
+                    console.error('Por favor, insira o nome do novo fornecedor.');
+                }
+            });
+
+            // Function to generate PDF
+            generatePdfButton.addEventListener('click', function() {
+                const input = document.getElementById('printable-area'); // The area to be converted to PDF
+
+                // Temporarily hide elements that should not appear in the PDF
+                const pdfHiddenElements = document.querySelectorAll('.pdf-hide, .view-suppliers-btn, .bdi-input, input[data-quantity], input[data-price], .inline-input, .remove-supplier-btn');
+                pdfHiddenElements.forEach(el => el.classList.add('pdf-hide')); // Add class to hide
+
+                // For text inputs that should appear as plain text in PDF
+                document.querySelectorAll('input[type="text"]:not(.pdf-hide), input[type="number"]:not(.pdf-hide)').forEach(inputElement => {
+                    inputElement.setAttribute('data-original-value', inputElement.value); // Store original value
+                    inputElement.value = inputElement.value; // Set value to ensure html2canvas captures it
+                    inputElement.style.border = 'none'; // Remove borders for PDF
+                    inputElement.style.padding = '0'; // Remove padding for PDF
+                    inputElement.style.boxShadow = 'none'; // Remove shadow for PDF
+                    inputElement.readOnly = true; // Make it non-editable
+                });
+
+
+                html2canvas(input, { scale: 2, useCORS: true }).then(canvas => {
+                    const imgData = canvas.toDataURL('image/png');
+                    // Changed orientation to 'l' for landscape
+                    const pdf = new window.jspdf.jsPDF('l', 'mm', 'a4'); // 'l' for landscape, 'mm' for millimeters, 'a4' size
+                    const imgWidth = 297; // A4 landscape width in mm
+                    const pageHeight = 210; // A4 landscape height in mm
+                    let imgHeight = canvas.height * imgWidth / canvas.width;
+                    let position = 0;
+
+                    // Add first page
+                    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                    let heightLeft = imgHeight;
+                    heightLeft -= pageHeight;
+
+                    // Add subsequent pages if content overflows
+                    while (heightLeft > -1) {
+                        position = heightLeft - imgHeight;
+                        pdf.addPage();
+                        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                        heightLeft -= pageHeight;
+                    }
+
+                    pdf.save('Orcamento_PROVIDEX.pdf'); // Save the PDF
+
+                    // Restore visibility and editability of elements after PDF generation
+                    pdfHiddenElements.forEach(el => el.classList.remove('pdf-hide')); // Remove class to show
+                    document.querySelectorAll('input[type="text"]:not(.pdf-hide), input[type="number"]:not(.pdf-hide)').forEach(inputElement => {
+                        inputElement.value = inputElement.getAttribute('data-original-value'); // Restore original value
+                        inputElement.style.border = ''; // Restore borders
+                        inputElement.style.padding = ''; // Restore padding
+                        inputElement.style.boxShadow = ''; // Restore shadow
+                        inputElement.readOnly = false; // Make it editable again
+                    });
+                });
+            });
+
+            // Initial render and calculation on page load
+            renderBudgetTable();
+            renderMainSuppliers(); // Render the main suppliers list
+        });
+    </script>
+</body>
+</html>
+```
